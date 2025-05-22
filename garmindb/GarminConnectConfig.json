@@ -6,9 +6,9 @@
         "domain"                        : "garmin.com"
     },
     "credentials": {
-        "user"                          : os.getenv("GARMIN_EMAIL"),
+        "user"                          : "florian.kuijlenburg@hotmail.com"
         "secure_password"               : false,
-        "password"                      : os.getenv("GARMIN_PASSWORD"),
+        "password"                      : "",
         "password_file"                 : null
     },
     "data": {
