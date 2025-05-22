@@ -27,4 +27,4 @@ jobs:
         GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
         GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
       run: |
-        python garmindb_cli.py latest
+        python scripts/garmindb_cli.py latest
