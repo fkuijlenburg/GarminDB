@@ -51,7 +51,7 @@ def upload_to_supabase(table_name, records):
         else:
             print(f"✅ Uploaded to {table_name}")
 
-# === Activity Parser (unchanged) ===
+# === Activity Parser (updated) ===
 def transform_activity(a):
     return {
         "activity_id": to_int(a.get("activityId")),
@@ -66,11 +66,11 @@ def transform_activity(a):
         "purposeful": to_bool(a.get("purposeful")),
         "average_hr": to_int(a.get("averageHR")),
         "max_hr": to_int(a.get("maxHR")),
-        "hr_zone_1_secs": to_float(a.get("hrTimeInZone1")),
-        "hr_zone_2_secs": to_float(a.get("hrTimeInZone2")),
-        "hr_zone_3_secs": to_float(a.get("hrTimeInZone3")),
-        "hr_zone_4_secs": to_float(a.get("hrTimeInZone4")),
-        "hr_zone_5_secs": to_float(a.get("hrTimeInZone5")),
+        "hrTimeInZone_1": to_float(a.get("hrTimeInZone1")),
+        "hrTimeInZone_2": to_float(a.get("hrTimeInZone2")),
+        "hrTimeInZone_3": to_float(a.get("hrTimeInZone3")),
+        "hrTimeInZone_4": to_float(a.get("hrTimeInZone4")),
+        "hrTimeInZone_5": to_float(a.get("hrTimeInZone5")),
         "aerobic_training_effect": to_float(a.get("aerobicTrainingEffect")),
         "anaerobic_training_effect": to_float(a.get("anaerobicTrainingEffect")),
         "aerobic_te_message": a.get("aerobicTrainingEffectMessage"),
