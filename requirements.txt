@@ -8,3 +8,4 @@ tcxfile>=1.0.4
 idbutils>=1.1.0
 # security fixes
 tornado>=6.4.2
+garminconnect
