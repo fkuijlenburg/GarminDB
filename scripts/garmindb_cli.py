@@ -98,10 +98,9 @@ def main():
 
     full_data = {
         "activities": [],
-        "monitoring": [],
+        "daily_stats": [],
         "sleep": [],
-        "sleep_summary": [],
-        "weight": []
+        "sleep_summary": []
     }
 
     # === 1. Fetch All Activities ===
@@ -109,18 +108,20 @@ def main():
     full_data["activities"] = activities
     upload_to_supabase("activities", [transform_activity(a) for a in activities])
 
-    # === 2. Monitoring + Sleep ===
-    start = datetime.date(2019, 1, 1)
+    # === 2. Monitoring to daily_stats ===
+    start = datetime.date(2020, 1, 1)
     end = datetime.date.today()
     for day in daterange(start, end):
         ds = day.strftime("%Y-%m-%d")
         print(f"📅 Processing {ds}")
         try:
             stat = client.get_stats(ds)
-            full_data["monitoring"].append({"date": ds, "data": stat})
-            upload_to_supabase("monitoring", [{"date": ds, "data": stat}])
+            stat["calendar_date"] = ds
+            full_data["daily_stats"].append(stat)
+            upload_to_supabase("daily_stats", [stat])
         except:
             pass
+
         try:
             sleep = client.get_sleep_data(ds)
             full_data["sleep"].append({"date": ds, "data": sleep})
@@ -140,16 +141,8 @@ def main():
                 upload_to_supabase("sleep_summary", [row])
         except:
             pass
-        time.sleep(1)
 
-    # === 3. Weight ===
-    try:
-        weight = client.get_body_composition("2019-01-01", end.isoformat())
-        wrapped_weight = [{"data": w} for w in weight]
-        full_data["weight"] = wrapped_weight
-        upload_to_supabase("weight", wrapped_weight)
-    except Exception as e:
-        print(f"⚠️ Weight: {e}")
+        time.sleep(1)
 
     # === Save JSON backup ===
     save_json(full_data)
