@@ -3,7 +3,7 @@ name: Garmin DB CI
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 4 * * *'  # runs daily at 04:00 UTC
+    - cron: '0 4 * * *'  # daily at 04:00 UTC
 
 jobs:
   garmin-process:
@@ -15,6 +15,8 @@ jobs:
       GARMINDATA_DIR: ./data
       GARMIN_LATEST_ACTIVITY_COUNT: 10
       GARMIN_ALL_ACTIVITY_COUNT: 30
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
 
     steps:
       - name: Checkout repository
@@ -33,13 +35,11 @@ jobs:
       - name: Run Garmin DB sync
         run: |
           echo "::group::Garmin DB Sync Output"
-          python scripts/garmindb_cli.py --download --import --analyze --all --latest --overwrite
+          python scripts/garmindb_cli.py
           echo "::endgroup::"
 
-      - name: Commit and push Garmin data
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add data/garmin_data.json
-          git commit -m "Update Garmin data [skip ci]" || echo "No changes to commit"
-          git push
+      - name: Upload Garmin JSON as artifact (optional)
+        uses: actions/upload-artifact@v4
+        with:
+          name: garmin-data
+          path: data/garmin_data.json
