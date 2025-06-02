@@ -51,20 +51,6 @@ def daterange(start_date, end_date):
     for n in range((end_date - start_date).days + 1):
         yield start_date + datetime.timedelta(n)
 
-def fetch_all_activities(client):
-    all_activities = []
-    start = 0
-    batch = 100
-    while True:
-        activities = client.get_activities(start, batch)
-        if not activities:
-            break
-        all_activities.extend(activities)
-        start += batch
-        print(f"📦 {len(all_activities)} total activities fetched...")
-        time.sleep(1)
-    return all_activities
-
 def transform_activity(a):
     return {
         "activity_id": to_int(a.get("activityId")),
@@ -79,11 +65,11 @@ def transform_activity(a):
         "purposeful": to_bool(a.get("purposeful")),
         "average_hr": to_int(a.get("averageHR")),
         "max_hr": to_int(a.get("maxHR")),
-        "hrTimeInZone_1": to_float(a.get("hrTimeInZone_1")),
-        "hrTimeInZone_2": to_float(a.get("hrTimeInZone_2")),
-        "hrTimeInZone_3": to_float(a.get("hrTimeInZone_3")),
-        "hrTimeInZone_4": to_float(a.get("hrTimeInZone_4")),
-        "hrTimeInZone_5": to_float(a.get("hrTimeInZone_5")),
+        "hr_time_in_zone_1": to_float(a.get("hrTimeInZone_1")),
+        "hr_time_in_zone_2": to_float(a.get("hrTimeInZone_2")),
+        "hr_time_in_zone_3": to_float(a.get("hrTimeInZone_3")),
+        "hr_time_in_zone_4": to_float(a.get("hrTimeInZone_4")),
+        "hr_time_in_zone_5": to_float(a.get("hrTimeInZone_5")),
         "calories": to_int(a.get("calories")),
         "start_time_local": a.get("startTimeLocal"),
         "end_time_local": a.get("endTimeLocal"),
@@ -103,8 +89,8 @@ def main():
         "sleep_summary": []
     }
 
-    # === 1. Fetch All Activities ===
-    activities = fetch_all_activities(client)
+    # === 1. Fetch Last 10 Activities ===
+    activities = client.get_activities(0, 10)
     full_data["activities"] = activities
     upload_to_supabase("activities", [transform_activity(a) for a in activities])
 
@@ -116,11 +102,14 @@ def main():
         print(f"📅 Processing {ds}")
         try:
             stat = client.get_stats(ds)
-            stat["calendar_date"] = ds
+            stat["calendar_date"] = stat.get("calendarDate") or ds
+            stat["user_profile_id"] = stat.get("userProfileId")
+            stat["user_daily_summary_id"] = stat.get("userDailySummaryId")
+            stat["rule_type"] = stat.get("rule", {}).get("typeKey")
             full_data["daily_stats"].append(stat)
             upload_to_supabase("daily_stats", [stat])
-        except:
-            pass
+        except Exception as e:
+            print(f"⚠️ Failed for {ds}: {e}")
 
         try:
             sleep = client.get_sleep_data(ds)
