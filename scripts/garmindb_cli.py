@@ -76,6 +76,13 @@ def transform_activity(a):
         "data": a
     }
 
+def transform_stat_keys(stat):
+    return {
+        k if "A-Z".isdisjoint(k) else
+        ''.join(['_' + c.lower() if c.isupper() else c for c in k]).lstrip('_'): v
+        for k, v in stat.items() if not isinstance(v, dict)
+    }
+
 def main():
     username = os.environ.get("GARMIN_USERNAME")
     password = os.environ.get("GARMIN_PASSWORD")
@@ -105,11 +112,10 @@ def main():
             if not isinstance(stat, dict):
                 raise ValueError("Garmin get_stats() did not return a dict")
 
-            stat["calendar_date"] = stat.get("calendarDate") or ds
-            stat["user_profile_id"] = stat.get("userProfileId")
-            stat["user_daily_summary_id"] = stat.get("userDailySummaryId")
-            rule = stat.get("rule") or {}
-            stat["rule_type"] = rule.get("typeKey")
+            stat = transform_stat_keys(stat)
+            stat["calendar_date"] = stat.get("calendar_date") or ds
+            rule = stat.get("rule", {})
+            stat["rule_type"] = rule.get("typeKey") if isinstance(rule, dict) else None
 
             full_data["daily_stats"].append(stat)
             upload_to_supabase("daily_stats", [stat])
