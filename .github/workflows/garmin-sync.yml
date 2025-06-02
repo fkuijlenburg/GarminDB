@@ -32,4 +32,6 @@ jobs:
 
       - name: Run Garmin DB sync
         run: |
+          echo "::group::Garmin DB Sync Output"
           python scripts/garmindb_cli.py --download --import --analyze --all --latest --overwrite
+          echo "::endgroup::"
