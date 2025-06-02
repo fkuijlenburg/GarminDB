@@ -1,6 +1,7 @@
 import os
 import json
 import datetime
+import requests
 from pathlib import Path
 from garminconnect import Garmin
 
@@ -12,19 +13,31 @@ def save_garmin_data_as_json(data, output_dir="data", filename="garmin_data.json
         json.dump(data, f, indent=2, ensure_ascii=False)
     print(f"✅ Garmin data saved to {full_path}")
 
+def upload_to_supabase(table_name, records):
+    url = os.environ["SUPABASE_URL"]
+    key = os.environ["SUPABASE_KEY"]
+    headers = {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json"
+    }
+    for record in records:
+        res = requests.post(f"{url}/rest/v1/{table_name}", headers=headers, json=[record])
+        if res.status_code >= 300:
+            print(f"❌ Upload to {table_name} failed: {res.status_code} {res.text}")
+        else:
+            print(f"✅ Uploaded to {table_name}")
+
 def main():
-    # Load credentials from environment
     username = os.environ.get("GARMIN_USERNAME")
     password = os.environ.get("GARMIN_PASSWORD")
 
     if not username or not password:
-        raise Exception("Missing GARMIN_USERNAME or GARMIN_PASSWORD environment variables.")
+        raise Exception("Missing GARMIN_USERNAME or GARMIN_PASSWORD")
 
-    # Initialize Garmin client
     client = Garmin(username, password)
     client.login()
 
-    # Define dates
     today = datetime.date.today()
     week_ago = today - datetime.timedelta(days=7)
 
@@ -34,23 +47,25 @@ def main():
 
     # 1. Activities
     try:
-        activities = client.get_activities(0, 10)  # Fetch 10 latest
+        activities = client.get_activities(0, 10)
         data["activities"] = activities
+        upload_to_supabase("activities", [{"data": a} for a in activities])
     except Exception as e:
-        print(f"⚠️ Failed to fetch activities: {e}")
+        print(f"⚠️ Activities: {e}")
 
-    # 2. Monitoring stats (daily steps, calories, etc.)
+    # 2. Monitoring
     try:
         monitoring = []
         for i in range(7):
             day = (today - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
-            day_data = client.get_stats(day)
-            monitoring.append({"date": day, "data": day_data})
+            stat = client.get_stats(day)
+            monitoring.append({"date": day, "data": stat})
         data["monitoring"] = monitoring
+        upload_to_supabase("monitoring", monitoring)
     except Exception as e:
-        print(f"⚠️ Failed to fetch monitoring data: {e}")
+        print(f"⚠️ Monitoring: {e}")
 
-    # 3. Sleep data
+    # 3. Sleep
     try:
         sleep_data = []
         for i in range(7):
@@ -58,28 +73,19 @@ def main():
             entry = client.get_sleep_data(day)
             sleep_data.append({"date": day, "data": entry})
         data["sleep"] = sleep_data
+        upload_to_supabase("sleep", sleep_data)
     except Exception as e:
-        print(f"⚠️ Failed to fetch sleep data: {e}")
+        print(f"⚠️ Sleep: {e}")
 
-    # 4. Weight / body composition
+    # 4. Weight
     try:
         weight_data = client.get_body_composition(week_ago.isoformat(), today.isoformat())
-        data["weight"] = weight_data
+        wrapped_weight = [{"data": w} for w in weight_data]
+        data["weight"] = wrapped_weight
+        upload_to_supabase("weight", wrapped_weight)
     except Exception as e:
-        print(f"⚠️ Failed to fetch weight data: {e}")
+        print(f"⚠️ Weight: {e}")
 
-    # 5. Resting Heart Rate (RHR)
-    try:
-        rhr_data = []
-        for i in range(7):
-            day = (today - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
-            entry = client.get_rhr(day)
-            rhr_data.append({"date": day, "rhr": entry})
-        data["rhr"] = rhr_data
-    except Exception as e:
-        print(f"⚠️ Failed to fetch RHR data: {e}")
-
-    # Save to JSON
     save_garmin_data_as_json(data)
 
 if __name__ == "__main__":
