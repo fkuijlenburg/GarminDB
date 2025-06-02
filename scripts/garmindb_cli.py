@@ -65,11 +65,11 @@ def transform_activity(a):
         "purposeful": to_bool(a.get("purposeful")),
         "average_hr": to_int(a.get("averageHR")),
         "max_hr": to_int(a.get("maxHR")),
-        "hr_time_in_zone_1": to_float(a.get("hrTimeInZone_1")),
-        "hr_time_in_zone_2": to_float(a.get("hrTimeInZone_2")),
-        "hr_time_in_zone_3": to_float(a.get("hrTimeInZone_3")),
-        "hr_time_in_zone_4": to_float(a.get("hrTimeInZone_4")),
-        "hr_time_in_zone_5": to_float(a.get("hrTimeInZone_5")),
+        "hrTimeInZone_1": to_float(a.get("hrTimeInZone_1")),
+        "hrTimeInZone_2": to_float(a.get("hrTimeInZone_2")),
+        "hrTimeInZone_3": to_float(a.get("hrTimeInZone_3")),
+        "hrTimeInZone_4": to_float(a.get("hrTimeInZone_4")),
+        "hrTimeInZone_5": to_float(a.get("hrTimeInZone_5")),
         "calories": to_int(a.get("calories")),
         "start_time_local": a.get("startTimeLocal"),
         "end_time_local": a.get("endTimeLocal"),
@@ -102,10 +102,15 @@ def main():
         print(f"📅 Processing {ds}")
         try:
             stat = client.get_stats(ds)
+            if not isinstance(stat, dict):
+                raise ValueError("Garmin get_stats() did not return a dict")
+
             stat["calendar_date"] = stat.get("calendarDate") or ds
             stat["user_profile_id"] = stat.get("userProfileId")
             stat["user_daily_summary_id"] = stat.get("userDailySummaryId")
-            stat["rule_type"] = stat.get("rule", {}).get("typeKey")
+            rule = stat.get("rule") or {}
+            stat["rule_type"] = rule.get("typeKey")
+
             full_data["daily_stats"].append(stat)
             upload_to_supabase("daily_stats", [stat])
         except Exception as e:
