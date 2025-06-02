@@ -51,7 +51,7 @@ def upload_to_supabase(table_name, records):
         else:
             print(f"✅ Uploaded to {table_name}")
 
-# === Activity Parser ===
+# === Activity Parser (unchanged) ===
 def transform_activity(a):
     return {
         "activity_id": to_int(a.get("activityId")),
@@ -64,7 +64,6 @@ def transform_activity(a):
         "lap_count": to_int(a.get("lapCount")),
         "manual_activity": to_bool(a.get("manualActivity")),
         "purposeful": to_bool(a.get("purposeful")),
-
         "average_hr": to_int(a.get("averageHR")),
         "max_hr": to_int(a.get("maxHR")),
         "hr_zone_1_secs": to_float(a.get("hrTimeInZone1")),
@@ -72,35 +71,28 @@ def transform_activity(a):
         "hr_zone_3_secs": to_float(a.get("hrTimeInZone3")),
         "hr_zone_4_secs": to_float(a.get("hrTimeInZone4")),
         "hr_zone_5_secs": to_float(a.get("hrTimeInZone5")),
-
         "aerobic_training_effect": to_float(a.get("aerobicTrainingEffect")),
         "anaerobic_training_effect": to_float(a.get("anaerobicTrainingEffect")),
         "aerobic_te_message": a.get("aerobicTrainingEffectMessage"),
         "anaerobic_te_message": a.get("anaerobicTrainingEffectMessage"),
-
         "calories": to_int(a.get("calories")),
         "bmr_calories": to_int(a.get("bmrCalories")),
         "auto_calc_calories": to_bool(a.get("autoCalcCalories")),
         "moderate_intensity_minutes": to_int(a.get("moderateIntensityMinutes")),
         "vigorous_intensity_minutes": to_int(a.get("vigorousIntensityMinutes")),
-
         "distance": to_float(a.get("distance")),
         "average_speed": to_float(a.get("averageSpeed")),
         "avg_stride_length": to_float(a.get("avgStrideLength")),
-
         "steps": to_int(a.get("steps")),
         "max_running_cadence": to_int(a.get("maxRunningCadenceInStepsPerMinute")),
         "avg_running_cadence": to_int(a.get("averageRunningCadenceInStepsPerMinute")),
         "max_double_cadence": to_int(a.get("maxDoubleCadence")),
-
         "start_time_gmt": a.get("startTimeGMT"),
         "end_time_gmt": a.get("endTimeGMT"),
         "start_time_local": a.get("startTimeLocal"),
         "begin_timestamp": to_int(a.get("beginTimestamp")),
         "min_lap_duration": to_float(a.get("minActivityLapDuration")),
-
         "water_estimated": to_float(a.get("waterEstimated")),
-
         "pr": to_bool(a.get("pr")),
         "favorite": to_bool(a.get("favorite")),
         "has_splits": to_bool(a.get("hasSplits")),
@@ -114,20 +106,16 @@ def transform_activity(a):
         "owner_id": to_int(a.get("ownerId")),
         "owner_full_name": a.get("ownerFullName"),
         "owner_display_name": a.get("ownerDisplayName"),
-
         "user_pro": to_bool(a.get("userPro")),
         "user_roles": a.get("userRoles"),
         "privacy": a.get("privacy", {}).get("typeKey"),
-
         "profile_img_small": a.get("ownerProfileImageUrlSmall"),
         "profile_img_medium": a.get("ownerProfileImageUrlMedium"),
         "profile_img_large": a.get("ownerProfileImageUrlLarge"),
-
         "deco_dive": to_bool(a.get("decoDive")),
         "qualifying_dive": to_bool(a.get("qualifyingDive")),
         "dive_gases": a.get("summarizedDiveInfo", {}).get("summarizedDiveGases"),
-
-        "data": a  # full original activity as backup
+        "data": a
     }
 
 # === Main ===
@@ -169,15 +157,30 @@ def main():
     except Exception as e:
         print(f"⚠️ Monitoring: {e}")
 
-    # 3. Sleep
+    # 3. Sleep (summarized)
     try:
         sleep_data = []
+        sleep_summaries = []
         for i in range(7):
             day = (today - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
             entry = client.get_sleep_data(day)
             sleep_data.append({"date": day, "data": entry})
+
+            dto = entry.get("dailySleepDTO", {})
+            if dto.get("calendarDate"):
+                sleep_summaries.append({
+                    "calendar_date": dto.get("calendarDate"),
+                    "sleep_seconds": to_int(dto.get("sleepTimeSeconds")),
+                    "deep_sleep_seconds": to_int(dto.get("deepSleepSeconds")),
+                    "light_sleep_seconds": to_int(dto.get("lightSleepSeconds")),
+                    "rem_sleep_seconds": to_int(dto.get("remSleepSeconds")),
+                    "awake_sleep_seconds": to_int(dto.get("awakeSleepSeconds")),
+                    "average_spo2": to_float(dto.get("averageSpO2Value")),
+                    "average_respiration": to_float(dto.get("averageRespirationValue"))
+                })
+
         data["sleep"] = sleep_data
-        upload_to_supabase("sleep", sleep_data)
+        upload_to_supabase("sleep_summary", sleep_summaries)
     except Exception as e:
         print(f"⚠️ Sleep: {e}")
 
