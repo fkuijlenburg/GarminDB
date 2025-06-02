@@ -1,75 +1,87 @@
 import os
+import json
+import datetime
+from pathlib import Path
+from garminconnect import Garmin
+from GarminConnectConfigManager import GarminConnectConfigManager  # assuming it's in the same dir or adjust import
 
-class GarminConnectConfigManager:
-    def __init__(self, config_path=None):
-        self._base_dir = os.environ.get("GARMINDATA_DIR", os.path.join(os.getcwd(), "data"))
-        self._db_dir = os.path.join(self._base_dir, "db")
-        self._activities_dir = os.path.join(self._base_dir, "activities")
-        self._monitoring_dir = os.path.join(self._base_dir, "monitoring")
-        self._sleep_dir = os.path.join(self._base_dir, "sleep")
-        self._weight_dir = os.path.join(self._base_dir, "weight")
-        self._rhr_dir = os.path.join(self._base_dir, "rhr")
-        self._fit_files_dir = os.path.join(self._base_dir, "fit")
-        self._backup_dir = os.path.join(self._base_dir, "backup")
-        self._plugins_dir = os.path.join(self._base_dir, "plugins")
+def save_garmin_data_as_json(data, config: GarminConnectConfigManager, filename="garmin_data.json"):
+    output_path = Path(config._base_dir) / filename
+    with output_path.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    print(f"✅ Garmin data saved to {output_path}")
 
-        os.makedirs(self._db_dir, exist_ok=True)
-        os.makedirs(self._activities_dir, exist_ok=True)
-        os.makedirs(self._monitoring_dir, exist_ok=True)
-        os.makedirs(self._sleep_dir, exist_ok=True)
-        os.makedirs(self._weight_dir, exist_ok=True)
-        os.makedirs(self._rhr_dir, exist_ok=True)
-        os.makedirs(self._fit_files_dir, exist_ok=True)
-        os.makedirs(self._backup_dir, exist_ok=True)
-        os.makedirs(self._plugins_dir, exist_ok=True)
+def main():
+    # Load credentials from environment
+    username = os.environ.get("GARMIN_USERNAME")
+    password = os.environ.get("GARMIN_PASSWORD")
 
-    def get_plugins_dir(self):
-        return self._plugins_dir
+    if not username or not password:
+        raise Exception("Missing GARMIN_USERNAME or GARMIN_PASSWORD")
 
-    def get_db_params(self):
-        return {"db_path": os.path.join(self._db_dir, "garmin.db")}
+    # Set up config and Garmin client
+    config = GarminConnectConfigManager()
+    client = Garmin(username, password)
+    client.login()
 
-    def get_activities_dir(self):
-        return self._activities_dir
+    # Fetch data
+    print("🔄 Fetching Garmin data...")
 
-    def get_monitoring_dir(self, year):
-        return os.path.join(self._monitoring_dir, str(year))
+    data = {}
+    today = datetime.date.today()
+    yesterday = today - datetime.timedelta(days=1)
+    week_ago = today - datetime.timedelta(days=7)
 
-    def get_monitoring_base_dir(self):
-        return self._monitoring_dir
+    # 1. Activities
+    try:
+        count = config.latest_activity_count()
+        activities = client.get_activities(0, count)
+        data["activities"] = activities
+    except Exception as e:
+        print(f"⚠️ Failed to fetch activities: {e}")
 
-    def get_sleep_dir(self):
-        return self._sleep_dir
+    # 2. Monitoring (steps, calories, etc.)
+    try:
+        monitoring = []
+        for i in range(7):
+            day = (today - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
+            day_data = client.get_stats(day)
+            monitoring.append({"date": day, "data": day_data})
+        data["monitoring"] = monitoring
+    except Exception as e:
+        print(f"⚠️ Failed to fetch monitoring data: {e}")
 
-    def get_weight_dir(self):
-        return self._weight_dir
+    # 3. Sleep
+    try:
+        sleep_data = []
+        for i in range(7):
+            day = (today - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
+            entry = client.get_sleep_data(day)
+            sleep_data.append({"date": day, "data": entry})
+        data["sleep"] = sleep_data
+    except Exception as e:
+        print(f"⚠️ Failed to fetch sleep data: {e}")
 
-    def get_rhr_dir(self):
-        return self._rhr_dir
+    # 4. Weight
+    try:
+        weight_data = client.get_body_composition(week_ago.isoformat(), today.isoformat())
+        data["weight"] = weight_data
+    except Exception as e:
+        print(f"⚠️ Failed to fetch weight data: {e}")
 
-    def get_fit_files_dir(self):
-        return self._fit_files_dir
+    # 5. Resting Heart Rate (RHR)
+    try:
+        rhr_data = []
+        for i in range(7):
+            day = (today - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
+            entry = client.get_rhr(day)
+            rhr_data.append({"date": day, "rhr": entry})
+        data["rhr"] = rhr_data
+    except Exception as e:
+        print(f"⚠️ Failed to fetch RHR data: {e}")
 
-    def get_backup_dir(self):
-        return self._backup_dir
+    # Save all data to JSON
+    save_garmin_data_as_json(data, config)
 
-    def get_db_dir(self):
-        return self._db_dir
-
-    def stat_start_date(self, stat_name):
-        return (datetime.date.today() - datetime.timedelta(days=7), 7)
-
-    def enabled_stats(self):
-        return [
-            Statistics.activities,
-            Statistics.monitoring,
-            Statistics.sleep,
-            Statistics.weight,
-            Statistics.rhr
-        ]
-
-    def latest_activity_count(self):
-        return int(os.environ.get("GARMIN_LATEST_ACTIVITY_COUNT", 5))
-
-    def all_activity_count(self):
-        return int(os.environ.get("GARMIN_ALL_ACTIVITY_COUNT", 30))
+if __name__ == "__main__":
+    main()
