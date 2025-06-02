@@ -67,11 +67,11 @@ def transform_activity(a):
 
         "average_hr": to_int(a.get("averageHR")),
         "max_hr": to_int(a.get("maxHR")),
-        "hr_zone_1_secs": to_int(a.get("hrTimeInZone1")),
-        "hr_zone_2_secs": to_int(a.get("hrTimeInZone2")),
-        "hr_zone_3_secs": to_int(a.get("hrTimeInZone3")),
-        "hr_zone_4_secs": to_int(a.get("hrTimeInZone4")),
-        "hr_zone_5_secs": to_int(a.get("hrTimeInZone5")),
+        "hr_zone_1_secs": to_float(a.get("hrTimeInZone1")),
+        "hr_zone_2_secs": to_float(a.get("hrTimeInZone2")),
+        "hr_zone_3_secs": to_float(a.get("hrTimeInZone3")),
+        "hr_zone_4_secs": to_float(a.get("hrTimeInZone4")),
+        "hr_zone_5_secs": to_float(a.get("hrTimeInZone5")),
 
         "aerobic_training_effect": to_float(a.get("aerobicTrainingEffect")),
         "anaerobic_training_effect": to_float(a.get("anaerobicTrainingEffect")),
