@@ -9,3 +9,4 @@ idbutils>=1.1.0
 # security fixes
 tornado>=6.4.2
 garminconnect
+requests
