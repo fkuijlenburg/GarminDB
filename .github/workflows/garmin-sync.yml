@@ -32,4 +32,4 @@ jobs:
 
       - name: Run Garmin DB sync
         run: |
-          python your_script.py --download --import --analyze --all --latest --overwrite
+          python garmindb_cli.py --download --import --analyze --all --latest --overwrite
