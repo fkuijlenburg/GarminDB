@@ -77,10 +77,13 @@ def transform_activity(a):
     }
 
 def transform_stat_keys(stat):
+    def snake_case(k):
+        return ''.join(['_' + c.lower() if c.isupper() else c for c in k]).lstrip('_')
+
     return {
-        k if "A-Z".isdisjoint(k) else
-        ''.join(['_' + c.lower() if c.isupper() else c for c in k]).lstrip('_'): v
-        for k, v in stat.items() if not isinstance(v, dict)
+        snake_case(k): v
+        for k, v in stat.items()
+        if not isinstance(v, dict)
     }
 
 def main():
@@ -112,10 +115,11 @@ def main():
             if not isinstance(stat, dict):
                 raise ValueError("Garmin get_stats() did not return a dict")
 
+            rule = stat.get("rule") if isinstance(stat.get("rule"), dict) else {}
+            stat["rule_type"] = rule.get("typeKey")
+
             stat = transform_stat_keys(stat)
             stat["calendar_date"] = stat.get("calendar_date") or ds
-            rule = stat.get("rule", {})
-            stat["rule_type"] = rule.get("typeKey") if isinstance(rule, dict) else None
 
             full_data["daily_stats"].append(stat)
             upload_to_supabase("daily_stats", [stat])
