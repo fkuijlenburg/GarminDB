@@ -2,10 +2,11 @@ import os
 import json
 import datetime
 import requests
+import time
 from pathlib import Path
 from garminconnect import Garmin
 
-# === Helpers for safe type conversion ===
+# === Helpers ===
 def to_int(value):
     try:
         return int(float(value)) if value is not None else None
@@ -25,16 +26,11 @@ def to_bool(value):
         return value.lower() == "true"
     return None
 
-# === JSON Export ===
-def save_garmin_data_as_json(data, output_dir="data", filename="garmin_data.json"):
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-    full_path = output_path / filename
-    with full_path.open("w", encoding="utf-8") as f:
+def save_json(data, filename="garmin_full_backup.json"):
+    Path("data").mkdir(parents=True, exist_ok=True)
+    with open(f"data/{filename}", "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-    print(f"✅ Garmin data saved to {full_path}")
 
-# === Supabase Upload ===
 def upload_to_supabase(table_name, records):
     url = os.environ["SUPABASE_URL"]
     key = os.environ["SUPABASE_KEY"]
@@ -51,7 +47,24 @@ def upload_to_supabase(table_name, records):
         else:
             print(f"✅ Uploaded to {table_name}")
 
-# === Activity Parser (updated) ===
+def daterange(start_date, end_date):
+    for n in range((end_date - start_date).days + 1):
+        yield start_date + datetime.timedelta(n)
+
+def fetch_all_activities(client):
+    all_activities = []
+    start = 0
+    batch = 100
+    while True:
+        activities = client.get_activities(start, batch)
+        if not activities:
+            break
+        all_activities.extend(activities)
+        start += batch
+        print(f"📦 {len(all_activities)} total activities fetched...")
+        time.sleep(1)
+    return all_activities
+
 def transform_activity(a):
     return {
         "activity_id": to_int(a.get("activityId")),
@@ -71,104 +84,49 @@ def transform_activity(a):
         "hrTimeInZone_3": to_float(a.get("hrTimeInZone_3")),
         "hrTimeInZone_4": to_float(a.get("hrTimeInZone_4")),
         "hrTimeInZone_5": to_float(a.get("hrTimeInZone_5")),
-        "aerobic_training_effect": to_float(a.get("aerobicTrainingEffect")),
-        "anaerobic_training_effect": to_float(a.get("anaerobicTrainingEffect")),
-        "aerobic_te_message": a.get("aerobicTrainingEffectMessage"),
-        "anaerobic_te_message": a.get("anaerobicTrainingEffectMessage"),
         "calories": to_int(a.get("calories")),
-        "bmr_calories": to_int(a.get("bmrCalories")),
-        "auto_calc_calories": to_bool(a.get("autoCalcCalories")),
-        "moderate_intensity_minutes": to_int(a.get("moderateIntensityMinutes")),
-        "vigorous_intensity_minutes": to_int(a.get("vigorousIntensityMinutes")),
-        "distance": to_float(a.get("distance")),
-        "average_speed": to_float(a.get("averageSpeed")),
-        "avg_stride_length": to_float(a.get("avgStrideLength")),
-        "steps": to_int(a.get("steps")),
-        "max_running_cadence": to_int(a.get("maxRunningCadenceInStepsPerMinute")),
-        "avg_running_cadence": to_int(a.get("averageRunningCadenceInStepsPerMinute")),
-        "max_double_cadence": to_int(a.get("maxDoubleCadence")),
-        "start_time_gmt": a.get("startTimeGMT"),
-        "end_time_gmt": a.get("endTimeGMT"),
         "start_time_local": a.get("startTimeLocal"),
-        "begin_timestamp": to_int(a.get("beginTimestamp")),
-        "min_lap_duration": to_float(a.get("minActivityLapDuration")),
-        "water_estimated": to_float(a.get("waterEstimated")),
-        "pr": to_bool(a.get("pr")),
-        "favorite": to_bool(a.get("favorite")),
-        "has_splits": to_bool(a.get("hasSplits")),
-        "has_polyline": to_bool(a.get("hasPolyline")),
-        "has_heat_map": to_bool(a.get("hasHeatMap")),
-        "has_images": to_bool(a.get("hasImages")),
-        "has_video": to_bool(a.get("hasVideo")),
-        "event_type": a.get("eventType", {}).get("typeKey"),
-        "device_id": to_int(a.get("deviceId")),
-        "manufacturer": a.get("manufacturer"),
-        "owner_id": to_int(a.get("ownerId")),
-        "owner_full_name": a.get("ownerFullName"),
-        "owner_display_name": a.get("ownerDisplayName"),
-        "user_pro": to_bool(a.get("userPro")),
-        "user_roles": a.get("userRoles"),
-        "privacy": a.get("privacy", {}).get("typeKey"),
-        "profile_img_small": a.get("ownerProfileImageUrlSmall"),
-        "profile_img_medium": a.get("ownerProfileImageUrlMedium"),
-        "profile_img_large": a.get("ownerProfileImageUrlLarge"),
-        "deco_dive": to_bool(a.get("decoDive")),
-        "qualifying_dive": to_bool(a.get("qualifyingDive")),
-        "dive_gases": a.get("summarizedDiveInfo", {}).get("summarizedDiveGases"),
+        "end_time_local": a.get("endTimeLocal"),
         "data": a
     }
 
-# === Main ===
 def main():
     username = os.environ.get("GARMIN_USERNAME")
     password = os.environ.get("GARMIN_PASSWORD")
-
-    if not username or not password:
-        raise Exception("Missing GARMIN_USERNAME or GARMIN_PASSWORD")
-
     client = Garmin(username, password)
     client.login()
 
-    today = datetime.date.today()
-    week_ago = today - datetime.timedelta(days=7)
+    full_data = {
+        "activities": [],
+        "monitoring": [],
+        "sleep": [],
+        "sleep_summary": [],
+        "weight": []
+    }
 
-    data = {}
+    # === 1. Fetch All Activities ===
+    activities = fetch_all_activities(client)
+    full_data["activities"] = activities
+    upload_to_supabase("activities", [transform_activity(a) for a in activities])
 
-    print("🔄 Fetching Garmin data...")
-
-    # 1. Activities
-    try:
-        activities = client.get_activities(0, 20)
-        data["activities"] = activities
-        structured = [transform_activity(a) for a in activities]
-        upload_to_supabase("activities", structured)
-    except Exception as e:
-        print(f"⚠️ Activities: {e}")
-
-    # 2. Monitoring
-    try:
-        monitoring = []
-        for i in range(7):
-            day = (today - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
-            stat = client.get_stats(day)
-            monitoring.append({"date": day, "data": stat})
-        data["monitoring"] = monitoring
-        upload_to_supabase("monitoring", monitoring)
-    except Exception as e:
-        print(f"⚠️ Monitoring: {e}")
-
-    # 3. Sleep (summarized)
-    try:
-        sleep_data = []
-        sleep_summaries = []
-        for i in range(7):
-            day = (today - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
-            entry = client.get_sleep_data(day)
-            sleep_data.append({"date": day, "data": entry})
-
-            dto = entry.get("dailySleepDTO", {})
+    # === 2. Monitoring + Sleep ===
+    start = datetime.date(2019, 1, 1)
+    end = datetime.date.today()
+    for day in daterange(start, end):
+        ds = day.strftime("%Y-%m-%d")
+        print(f"📅 Processing {ds}")
+        try:
+            stat = client.get_stats(ds)
+            full_data["monitoring"].append({"date": ds, "data": stat})
+            upload_to_supabase("monitoring", [{"date": ds, "data": stat}])
+        except:
+            pass
+        try:
+            sleep = client.get_sleep_data(ds)
+            full_data["sleep"].append({"date": ds, "data": sleep})
+            dto = sleep.get("dailySleepDTO", {})
             if dto.get("calendarDate"):
-                sleep_summaries.append({
+                row = {
                     "calendar_date": dto.get("calendarDate"),
                     "sleep_seconds": to_int(dto.get("sleepTimeSeconds")),
                     "deep_sleep_seconds": to_int(dto.get("deepSleepSeconds")),
@@ -177,23 +135,24 @@ def main():
                     "awake_sleep_seconds": to_int(dto.get("awakeSleepSeconds")),
                     "average_spo2": to_float(dto.get("averageSpO2Value")),
                     "average_respiration": to_float(dto.get("averageRespirationValue"))
-                })
+                }
+                full_data["sleep_summary"].append(row)
+                upload_to_supabase("sleep_summary", [row])
+        except:
+            pass
+        time.sleep(1)
 
-        data["sleep"] = sleep_data
-        upload_to_supabase("sleep_summary", sleep_summaries)
-    except Exception as e:
-        print(f"⚠️ Sleep: {e}")
-
-    # 4. Weight
+    # === 3. Weight ===
     try:
-        weight_data = client.get_body_composition(week_ago.isoformat(), today.isoformat())
-        wrapped_weight = [{"data": w} for w in weight_data]
-        data["weight"] = wrapped_weight
+        weight = client.get_body_composition("2019-01-01", end.isoformat())
+        wrapped_weight = [{"data": w} for w in weight]
+        full_data["weight"] = wrapped_weight
         upload_to_supabase("weight", wrapped_weight)
     except Exception as e:
         print(f"⚠️ Weight: {e}")
 
-    save_garmin_data_as_json(data)
+    # === Save JSON backup ===
+    save_json(full_data)
 
 if __name__ == "__main__":
     main()
