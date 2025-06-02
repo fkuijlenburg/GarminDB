@@ -47,7 +47,7 @@ def main():
 
     # 1. Activities
     try:
-        activities = client.get_activities(0, 10)
+        activities = client.get_activities(0, 11)
         data["activities"] = activities
         upload_to_supabase("activities", [{"data": a} for a in activities])
     except Exception as e:
