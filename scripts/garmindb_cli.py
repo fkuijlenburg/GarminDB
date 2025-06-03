@@ -30,7 +30,7 @@ def to_bool(value):
         return value.lower() == "true"
     return None
 
-def save_json(data, filename="garmin_full_backup.json"):
+def save_json(data, filename="garmin_weekly_backup.json"):
     Path("data").mkdir(parents=True, exist_ok=True)
     with open(f"data/{filename}", "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
@@ -119,15 +119,16 @@ def main():
         "sleep_summary": []
     }
 
-    # === 1. Activities ===
+    # === 1. Latest Activities ===
     activities = client.get_activities(0, 10)
     full_data["activities"] = activities
     upload_to_supabase("activities", [transform_activity(a) for a in activities])
 
-    # === 2. Daily Stats & Sleep ===
-    start = datetime.date(2020, 1, 1)
-    end = datetime.date.today()
-    for day in daterange(start, end):
+    # === 2. Past Week Daily Stats & Sleep ===
+    today = datetime.date.today()
+    one_week_ago = today - datetime.timedelta(days=6)
+
+    for day in daterange(one_week_ago, today):
         ds = day.strftime("%Y-%m-%d")
         print(f"📅 Processing {ds}")
         try:
