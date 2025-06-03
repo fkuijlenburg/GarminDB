@@ -164,4 +164,11 @@ def main():
                 full_data["sleep_summary"].append(row)
                 upload_to_supabase("sleep_summary", [row])
         except Exception as e:
-            print(
+            print(f"⚠️ Sleep failed for {ds}: {e}")
+
+        time.sleep(1)
+
+    save_json(full_data)
+
+if __name__ == "__main__":
+    main()
