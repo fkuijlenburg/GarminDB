@@ -12,3 +12,5 @@ garminconnect
 requests
 uvicorn
 fastapi
+python-dotenv
+supabase-py
