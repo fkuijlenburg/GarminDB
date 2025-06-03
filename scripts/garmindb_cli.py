@@ -6,6 +6,10 @@ import time
 from pathlib import Path
 from garminconnect import Garmin
 
+# === ENV ===
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_KEY = os.environ["SUPABASE_KEY"]
+
 # === Helpers ===
 def to_int(value):
     try:
@@ -31,22 +35,6 @@ def save_json(data, filename="garmin_full_backup.json"):
     with open(f"data/{filename}", "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
-def upload_to_supabase(table_name, records):
-    url = os.environ["SUPABASE_URL"]
-    key = os.environ["SUPABASE_KEY"]
-    headers = {
-        "apikey": key,
-        "Authorization": f"Bearer {key}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates"
-    }
-    for record in records:
-        res = requests.post(f"{url}/rest/v1/{table_name}", headers=headers, json=[record])
-        if res.status_code >= 300:
-            print(f"❌ Upload to {table_name} failed: {res.status_code} {res.text}")
-        else:
-            print(f"✅ Uploaded to {table_name}")
-
 def daterange(start_date, end_date):
     for n in range((end_date - start_date).days + 1):
         yield start_date + datetime.timedelta(n)
@@ -65,11 +53,6 @@ def transform_activity(a):
         "purposeful": to_bool(a.get("purposeful")),
         "average_hr": to_int(a.get("averageHR")),
         "max_hr": to_int(a.get("maxHR")),
-        "hrTimeInZone_1": to_float(a.get("hrTimeInZone_1")),
-        "hrTimeInZone_2": to_float(a.get("hrTimeInZone_2")),
-        "hrTimeInZone_3": to_float(a.get("hrTimeInZone_3")),
-        "hrTimeInZone_4": to_float(a.get("hrTimeInZone_4")),
-        "hrTimeInZone_5": to_float(a.get("hrTimeInZone_5")),
         "calories": to_int(a.get("calories")),
         "start_time_local": a.get("startTimeLocal"),
         "end_time_local": a.get("endTimeLocal"),
@@ -79,13 +62,49 @@ def transform_activity(a):
 def transform_stat_keys(stat):
     def snake_case(k):
         return ''.join(['_' + c.lower() if c.isupper() else c for c in k]).lstrip('_')
+    return {snake_case(k): v for k, v in stat.items() if not isinstance(v, dict)}
 
-    return {
-        snake_case(k): v
-        for k, v in stat.items()
-        if not isinstance(v, dict)
+# === Supabase Upload with Dynamic Schema ===
+TABLE_COLUMNS_CACHE = {}
+
+def get_table_columns(table_name):
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}"
+    }
+    resp = requests.get(
+        f"{SUPABASE_URL}/rest/v1/information_schema.columns",
+        headers=headers,
+        params={
+            "select": "column_name",
+            "table_name": f"eq.{table_name}"
+        }
+    )
+    if resp.status_code != 200:
+        raise Exception(f"Failed to fetch schema for {table_name}: {resp.status_code} {resp.text}")
+    return {row["column_name"] for row in resp.json()}
+
+def upload_to_supabase(table_name, records):
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates"
     }
 
+    if table_name not in TABLE_COLUMNS_CACHE:
+        TABLE_COLUMNS_CACHE[table_name] = get_table_columns(table_name)
+    allowed_keys = TABLE_COLUMNS_CACHE[table_name]
+
+    for record in records:
+        filtered = {k: v for k, v in record.items() if k in allowed_keys}
+        res = requests.post(f"{SUPABASE_URL}/rest/v1/{table_name}", headers=headers, json=[filtered])
+        if res.status_code >= 300:
+            print(f"❌ Upload to {table_name} failed: {res.status_code} {res.text}")
+        else:
+            print(f"✅ Uploaded to {table_name}")
+
+# === Main Logic ===
 def main():
     username = os.environ.get("GARMIN_USERNAME")
     password = os.environ.get("GARMIN_PASSWORD")
@@ -99,12 +118,12 @@ def main():
         "sleep_summary": []
     }
 
-    # === 1. Fetch Last 10 Activities ===
+    # === 1. Activities ===
     activities = client.get_activities(0, 10)
     full_data["activities"] = activities
     upload_to_supabase("activities", [transform_activity(a) for a in activities])
 
-    # === 2. Monitoring to daily_stats ===
+    # === 2. Daily Stats & Sleep ===
     start = datetime.date(2020, 1, 1)
     end = datetime.date.today()
     for day in daterange(start, end):
@@ -124,7 +143,7 @@ def main():
             full_data["daily_stats"].append(stat)
             upload_to_supabase("daily_stats", [stat])
         except Exception as e:
-            print(f"⚠️ Failed for {ds}: {e}")
+            print(f"⚠️ Stats failed for {ds}: {e}")
 
         try:
             sleep = client.get_sleep_data(ds)
@@ -148,7 +167,6 @@ def main():
 
         time.sleep(1)
 
-    # === Save JSON backup ===
     save_json(full_data)
 
 if __name__ == "__main__":
