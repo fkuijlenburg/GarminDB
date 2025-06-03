@@ -64,24 +64,25 @@ def transform_stat_keys(stat):
         return ''.join(['_' + c.lower() if c.isupper() else c for c in k]).lstrip('_')
     return {snake_case(k): v for k, v in stat.items() if not isinstance(v, dict)}
 
-# === Supabase Upload with Dynamic Schema ===
+# === Supabase Upload ===
 TABLE_COLUMNS_CACHE = {}
 
 def get_table_columns(table_name):
     headers = {
         "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}"
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json"
     }
-    resp = requests.get(
-        f"{SUPABASE_URL}/rest/v1/information_schema.columns",
+
+    resp = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/get_columns",
         headers=headers,
-        params={
-            "select": "column_name",
-            "table_name": f"eq.{table_name}"
-        }
+        json={ "tablename": table_name }
     )
+
     if resp.status_code != 200:
         raise Exception(f"Failed to fetch schema for {table_name}: {resp.status_code} {resp.text}")
+
     return {row["column_name"] for row in resp.json()}
 
 def upload_to_supabase(table_name, records):
@@ -104,7 +105,7 @@ def upload_to_supabase(table_name, records):
         else:
             print(f"✅ Uploaded to {table_name}")
 
-# === Main Logic ===
+# === Main ===
 def main():
     username = os.environ.get("GARMIN_USERNAME")
     password = os.environ.get("GARMIN_PASSWORD")
@@ -162,12 +163,5 @@ def main():
                 }
                 full_data["sleep_summary"].append(row)
                 upload_to_supabase("sleep_summary", [row])
-        except:
-            pass
-
-        time.sleep(1)
-
-    save_json(full_data)
-
-if __name__ == "__main__":
-    main()
+        except Exception as e:
+            print(
